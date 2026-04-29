@@ -216,3 +216,61 @@ def test_ccr_inject_marker_true_emits_markers_when_lossy():
     # to drop and the marker to fire.
     if "lossy" in result.strategy or "row" in result.strategy.lower():
         assert "<<ccr:" in result.compressed
+
+
+def test_ccr_enabled_false_suppresses_markers_in_output():
+    """`CCRConfig.enabled=False` is the master kill-switch and must
+    behave the same as `inject_retrieval_marker=False`: no marker text,
+    no sentinel key, no CCR store write. The audit found this knob was
+    silently ignored — both flags now collapse to the same Rust-side
+    `enable_ccr_marker=False` gate.
+
+    Storing a payload under `enabled=False` would also be a surprise
+    side effect: the user explicitly opted out of CCR.
+    """
+    from headroom.config import CCRConfig
+
+    crusher = SmartCrusher(
+        SmartCrusherConfig(),
+        # Note: inject_retrieval_marker stays True — we want to prove
+        # `enabled=False` alone is enough to suppress.
+        ccr_config=CCRConfig(enabled=False, inject_retrieval_marker=True),
+    )
+    payload = _bigger_array(60)
+    result = crusher.crush(payload, query="", bias=1.0)
+
+    if result.strategy == "passthrough":
+        pytest.skip("payload didn't trigger compression — bump the size")
+
+    assert "<<ccr:" not in result.compressed, f"expected no marker, got: {result.compressed!r}"
+    assert "_ccr_dropped" not in result.compressed
+
+
+# ─── Custom scorer / relevance_config override ─────────────────────────
+
+
+def test_custom_scorer_arg_raises_not_implemented():
+    """The Rust port doesn't support custom scorers yet. Silently
+    dropping a user-supplied scorer would be a textbook silent
+    fallback (the user's scoring logic gets ignored, compression
+    looks fine but is wrong). Fail loud instead.
+    """
+
+    class FakeScorer:
+        pass
+
+    with pytest.raises(NotImplementedError, match="relevance_config.*scorer"):
+        SmartCrusher(SmartCrusherConfig(), scorer=FakeScorer())
+
+
+def test_custom_relevance_config_arg_raises_not_implemented():
+    """Same fail-loud contract for `relevance_config`."""
+    with pytest.raises(NotImplementedError, match="relevance_config.*scorer"):
+        SmartCrusher(SmartCrusherConfig(), relevance_config={"alpha": 0.7})
+
+
+def test_default_construction_still_works():
+    """Sanity: the audit fail-loud only triggers when the user passes
+    one of the unsupported args. Default `SmartCrusher()` still
+    constructs fine."""
+    SmartCrusher(SmartCrusherConfig())  # no raise
