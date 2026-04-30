@@ -20,6 +20,7 @@ pub mod anchor_selector;
 pub mod content_detector;
 pub mod detection;
 pub mod diff_compressor;
+pub mod log_compressor;
 pub mod magika_detector;
 pub mod smart_crusher;
 pub mod unidiff_detector;
@@ -30,6 +31,10 @@ pub use content_detector::{
 pub use detection::detect;
 pub use diff_compressor::{
     DiffCompressionResult, DiffCompressor, DiffCompressorConfig, DiffCompressorStats,
+};
+pub use log_compressor::{
+    LogCompressionResult, LogCompressor, LogCompressorConfig, LogCompressorStats, LogFormat,
+    LogLevel, LogLine,
 };
 pub use magika_detector::{magika_detect, map_magika_label, MagikaDetectorError};
 pub use unidiff_detector::{detect_diff, is_diff};
